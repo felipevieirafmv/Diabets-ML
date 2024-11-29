@@ -1,80 +1,43 @@
 import pandas as pd
+from joblib import load
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import QuantileTransformer, LabelEncoder
-from sklearn.ensemble import RandomForestClassifier
-import numpy as np
 
-# Carregar o dataset
-df = pd.read_csv("diabetes_dataset00.csv")
+# Função para fazer previsões com encoders e scaler já treinados
+def fazer_previsao(df, model_path="random_forest_model.joblib", label_encoders=None, scaler=None, selected_columns=None):
+    # Carregar o modelo
+    model = load(model_path)
+    
+    # Se o dataframe contiver variáveis categóricas, aplicar os encoders
+    if label_encoders:
+        for column in selected_columns:  # Usar as colunas selecionadas
+            if column in df.select_dtypes(include="object").columns:
+                if column in label_encoders:
+                    le = label_encoders[column]
+                    df[column] = le.transform(df[column])  # Aplica a transformação
 
-# Selecionar as colunas relevantes, excluindo 'Age' e 'BMI'
-selected_columns = [
-    "Family History",
-    "Physical Activity",
-    "Dietary Habits",
-    "Socioeconomic Factors",
-    "Smoking Status",
-    "Alcohol Consumption",
-    "Pregnancy History",
-    "Steroid Use History",
-    "Genetic Testing",
-    "Liver Function Tests"
-]
+    # Se o scaler foi fornecido, escalar as features
+    if scaler:
+        df_scaled = scaler.transform(df[selected_columns])  # Usar o scaler treinado
+    else:
+        df_scaled = df[selected_columns]  # Caso não tenha um scaler, usa os dados sem escalonar
+    
+    # Realizar as previsões
+    predictions = model.predict(df_scaled)
+    
+    return predictions
 
-X = df[selected_columns]
-y = df["Target"]
+# Exemplo de como usar:
+# 1. Carregar o dataframe com os dados que você quer prever
+df_novo = pd.read_csv("novo_dataset.csv")
 
-# Aplicando o LabelEncoder nas colunas categóricas
-label_encoder = LabelEncoder()
+# 2. Prever com o modelo, usando seus encoders e scaler já treinados
+# Certifique-se de que você já tem os encoders e scaler treinados e carregados:
+# label_encoders = { ... }  # Dicionário com seus LabelEncoders
+# scaler = StandardScaler()  # Seu scaler treinado
 
-# Lista de colunas categóricas
-categorical_columns = X.select_dtypes(include=['object']).columns
+# 3. Prever com o modelo
+predicoes = fazer_previsao(df_novo, model_path="random_forest_model.joblib", 
+                            label_encoders=label_encoders, scaler=scaler, selected_columns=selected_columns)
 
-# Transformar as colunas categóricas
-for col in categorical_columns:
-    X.loc[:, col] = label_encoder.fit_transform(X[col])
-
-# Definir explicitamente as colunas numéricas
-numerical_columns = [
-    "Family History", 
-    "Physical Activity", 
-    "Dietary Habits", 
-    "Socioeconomic Factors", 
-    "Smoking Status", 
-    "Alcohol Consumption", 
-    "Pregnancy History", 
-    "Steroid Use History", 
-    "Genetic Testing", 
-    "Liver Function Tests"
-]
-
-# Dividir os dados
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Pré-processar os dados numéricos
-scaler = QuantileTransformer()
-
-# Escalonar as variáveis numéricas
-X_train[numerical_columns] = scaler.fit_transform(X_train[numerical_columns])
-X_test[numerical_columns] = scaler.transform(X_test[numerical_columns])
-
-# Criar e treinar o modelo
-random_forest_model = RandomForestClassifier(
-    n_estimators=500,        # Mais árvores
-    max_depth=10,            # Limitar a profundidade das árvores
-    max_features='sqrt',     # Usar a raiz quadrada das features
-    criterion='gini',        # Usar o índice de Gini
-    class_weight='balanced', # Lidar com classes desbalanceadas
-    random_state=42
-)
-
-# Treinar o modelo
-random_forest_model.fit(X_train, y_train)
-
-# Avaliar a acurácia
-accuracy = random_forest_model.score(X_test, y_test)
-print(f"Acurácia do RandomForest: {accuracy:.2f}")
-
-# Avaliar as importâncias das features
-feature_importances = random_forest_model.feature_importances_
-print("Importâncias das features:", feature_importances)
+print(predicoes)
